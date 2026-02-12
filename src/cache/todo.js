@@ -21,7 +21,7 @@ export function markCacheDirtyForTokenProps({ ctx, token }){
 	if(ctx.backwards)
 		return
 
-	let subject = getAccountId({ ctx, token })
+	let subject = getTokenId({ ctx, token })
 
 	if(!subject)
 		return
@@ -88,7 +88,7 @@ export function markCacheDirtyForTokenIcons({ ctx, token }){
 }
 
 export function markCacheDirtyForAccountIcons({ ctx, account }){
-	let subject = getTokenId({ ctx, account })
+	let subject = getAccountId({ ctx, account })
 
 	if(!subject)
 		return

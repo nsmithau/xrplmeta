@@ -120,25 +120,31 @@ export function writePoint({ table, selector, ledgerSequence, backwards, data, e
 }
 
 export function getAccountId({ ctx, account }){
+	if(!account)
+		return undefined
 	if(account.id)
 		return account.id
 
-	return ctx.db.core.accounts.readOne({
+	let row = ctx.db.core.accounts.readOne({
 		where: account,
 		select: {
 			id: true
 		}
-	}).id
+	})
+	return row?.id
 }
 
 export function getTokenId({ ctx, token }){
+	if(!token)
+		return undefined
 	if(token.id)
 		return token.id
 
-	return ctx.db.core.tokens.readOne({
+	let row = ctx.db.core.tokens.readOne({
 		where: token,
 		select: {
 			id: true
 		}
-	}).id
+	})
+	return row?.id
 }
