@@ -1,7 +1,7 @@
 import { getAccountId, getTokenId } from '../db/helpers/common.js'
 
 export function markCacheDirtyForAccountProps({ ctx, account }){
-	if(ctx.backwards)
+	if(ctx.backwards || ctx.snapshot)
 		return
 
 	let subject = getAccountId({ ctx, account })
@@ -18,7 +18,7 @@ export function markCacheDirtyForAccountProps({ ctx, account }){
 }
 
 export function markCacheDirtyForTokenProps({ ctx, token }){
-	if(ctx.backwards)
+	if(ctx.backwards || ctx.snapshot)
 		return
 
 	let subject = getTokenId({ ctx, token })
@@ -35,7 +35,7 @@ export function markCacheDirtyForTokenProps({ ctx, token }){
 }
 
 export function markCacheDirtyForTokenMetrics({ ctx, token, metrics }){
-	if(ctx.backwards)
+	if(ctx.backwards || ctx.snapshot)
 		return
 
 	let subject = getTokenId({ ctx, token })
@@ -54,7 +54,7 @@ export function markCacheDirtyForTokenMetrics({ ctx, token, metrics }){
 }
 
 export function markCacheDirtyForTokenExchanges({ ctx, token }){
-	if(ctx.backwards)
+	if(ctx.backwards || ctx.snapshot)
 		return
 
 	if(token.currency === 'XRP')
@@ -74,6 +74,9 @@ export function markCacheDirtyForTokenExchanges({ ctx, token }){
 }
 
 export function markCacheDirtyForTokenIcons({ ctx, token }){
+	if(ctx.snapshot)
+		return
+
 	let subject = getTokenId({ ctx, token })
 
 	if(!subject)
@@ -88,6 +91,9 @@ export function markCacheDirtyForTokenIcons({ ctx, token }){
 }
 
 export function markCacheDirtyForAccountIcons({ ctx, account }){
+	if(ctx.snapshot)
+		return
+
 	let subject = getAccountId({ ctx, account })
 
 	if(!subject)
@@ -97,6 +103,39 @@ export function markCacheDirtyForAccountIcons({ ctx, account }){
 		data: {
 			task: 'account.icons',
 			subject
+		}
+	})
+}
+
+const SNAPSHOT_TOKEN_TASKS = [
+	'token.props',
+	'token.exchanges',
+	'token.metrics.trustlines',
+	'token.metrics.holders',
+	'token.metrics.supply',
+	'token.metrics.marketcap',
+	'token.icons'
+]
+const SNAPSHOT_ACCOUNT_TASKS = ['account.props', 'account.icons']
+
+export function enqueueSnapshotCacheTodos({ ctx }){
+	const tokens = ctx.db.core.tokens.readMany().slice(1)
+	const accountIds = new Set()
+	for(const token of tokens){
+		if(token.issuer?.id)
+			accountIds.add(token.issuer.id)
+	}
+	ctx.db.cache.tx(() => {
+		for(const token of tokens){
+			const subject = token.id
+			for(const task of SNAPSHOT_TOKEN_TASKS){
+				ctx.db.cache.todos.createOne({ data: { task, subject } })
+			}
+		}
+		for(const subject of accountIds){
+			for(const task of SNAPSHOT_ACCOUNT_TASKS){
+				ctx.db.cache.todos.createOne({ data: { task, subject } })
+			}
 		}
 	})
 }

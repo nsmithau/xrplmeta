@@ -7,8 +7,10 @@ data_dir = "<path to empty folder>"
 # Any ledgers before this sequence will be ignored
 # For full-history livenet, this value should be 32570, beause the first 32569 ledgers were lost
 backfill_to_ledger = 32570
-# How many ledger objects per ledger_data request to fetch
-snapshot_chunk_size = 64000
+# How many ledger objects per ledger_data request to fetch (increase if your node allows larger responses)
+snapshot_chunk_size = 128000
+# Max chunks to prefetch while applying snapshot (more overlap between fetch and apply)
+snapshot_queue_max = 20
 # How many ledgers to fetch in advance before writing them to the database
 stream_queue_size = 100
 

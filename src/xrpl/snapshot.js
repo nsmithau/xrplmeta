@@ -6,8 +6,9 @@ export async function start({ ctx, ledgerSequence, marker, node }){
 		log.pipe(ctx.log)
 
 	let chunkSize = ctx.config.ledger.snapshotChunkSize || 10000
+	let queueMax = ctx.config.ledger.snapshotQueueMax || 10
 	let queue = []
-	
+
 	let { result, node: assignedNode } = await ctx.xrpl.request({
 		type: 'reserveTicket',
 		task: 'snapshot',
@@ -23,7 +24,7 @@ export async function start({ ctx, ledgerSequence, marker, node }){
 
 	let promise = (async() => {
 		while(true){
-			while(queue.length >= 10)
+			while(queue.length >= queueMax)
 				await wait(100)
 
 			try{

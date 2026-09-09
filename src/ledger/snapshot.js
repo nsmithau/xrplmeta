@@ -5,6 +5,7 @@ import { fetch as fetchLedger } from '../xrpl/ledger.js'
 import { applyLedgerStateFromObjects } from './state/index.js'
 import { applyLedgerEvents } from './events/index.js'
 import { updateAllDerived } from './derived/index.js'
+import { enqueueSnapshotCacheTodos } from '../cache/todo.js'
 
 
 export async function createSnapshot({ ctx }){
@@ -21,6 +22,7 @@ export async function createSnapshot({ ctx }){
 
 	if(ctx.snapshotState.entriesCount === 0 || ctx.snapshotState.marker){
 		try{
+			ctx.snapshot = true
 			await copyFromFeed({
 				ctx,
 				feed: await createFeed({
@@ -30,7 +32,10 @@ export async function createSnapshot({ ctx }){
 					node: ctx.snapshotState.originNode
 				})
 			})
+			ctx.snapshot = false
+			enqueueSnapshotCacheTodos({ ctx })
 		}catch(error){
+			ctx.snapshot = false
 			log.error(`fatal error while copying from ledger feed:`)
 			log.error(error.stack)
 	

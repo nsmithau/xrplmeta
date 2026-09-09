@@ -3,17 +3,49 @@ import createSocket from '@xrplkit/socket'
 import log from '@mwni/log'
 
 
+const RECONNECT_BACKOFF_BASE_MS = 5000
+const RECONNECT_BACKOFF_RATE_LIMIT_MS = 60000
+const RECONNECT_BACKOFF_MAX_MS = 300000
+
+function isRateLimited(reason){
+	if(!reason || typeof reason !== 'string')
+		return false
+	const s = reason.toLowerCase()
+	return s.includes('limit') || s.includes('rate') || s.includes('throttl')
+}
+
 export default class Node extends EventEmitter{
 	constructor(config){
 		super()
 
+		this.config = config
 		this.name = config.url
 			.replace(/^wss?:\/\//, '')
 			.replace(/:[0-9]+/, '')
 
 		this.tasks = []
-		this.socket = createSocket({ url: config.url })
 		this.availableLedgers = []
+		this.reconnectAttempt = 0
+		this.reconnectTimer = null
+
+		this.connect()
+	}
+
+	connect(){
+		if(this.reconnectTimer){
+			clearTimeout(this.reconnectTimer)
+			this.reconnectTimer = null
+		}
+
+		if(this.socket){
+			try{ this.socket.close() }catch(_){}
+			this.socket = null
+		}
+
+		this.socket = createSocket({
+			url: this.config.url,
+			autoReconnect: false
+		})
 
 		this.socket.on('transaction', tx => {
 			this.emit('event', {hash: tx.transaction.hash, tx})
@@ -34,6 +66,7 @@ export default class Node extends EventEmitter{
 		})
 
 		this.socket.on('open', async () => {
+			this.reconnectAttempt = 0
 			this.hasReportedClosedLedger = false
 			this.emit('connected')
 
@@ -48,16 +81,41 @@ export default class Node extends EventEmitter{
 			}
 		})
 
-		this.socket.on('close', async event => {
-			this.error = event.reason 
+		this.socket.on('close', event => {
+			this.error = event.reason
 				? event.reason
 				: `code ${event.code}`
 
 			this.emit('disconnected')
+
+			const rateLimited = isRateLimited(this.error)
+			const delay = rateLimited
+				? Math.min(
+					RECONNECT_BACKOFF_RATE_LIMIT_MS * Math.pow(2, this.reconnectAttempt),
+					RECONNECT_BACKOFF_MAX_MS
+				)
+				: Math.min(
+					RECONNECT_BACKOFF_BASE_MS * Math.pow(2, this.reconnectAttempt),
+					RECONNECT_BACKOFF_MAX_MS
+				)
+
+			this.reconnectAttempt++
+
+			if(rateLimited){
+				log.warn(
+					`rate limited by ${this.name}, backing off ${delay / 1000}s before reconnect (attempt ${this.reconnectAttempt})`
+				)
+			}
+
+			this.reconnectTimer = setTimeout(() => {
+				this.reconnectTimer = null
+				log.info(`reconnecting to ${this.name} ...`)
+				this.connect()
+			}, delay)
 		})
 
 		this.socket.on('error', error => {
-			this.error = error.message 
+			this.error = error.message
 				? error.message
 				: `unknown connection failure`
 
@@ -131,6 +189,13 @@ export default class Node extends EventEmitter{
 	}
 
 	disconnect(){
-		this.socket.close()
+		if(this.reconnectTimer){
+			clearTimeout(this.reconnectTimer)
+			this.reconnectTimer = null
+		}
+		if(this.socket){
+			this.socket.close()
+			this.socket = null
+		}
 	}
 }
